@@ -162,7 +162,7 @@ def run_agent(port, secret):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # start listening
-    sock.bind(('0.0.0.0', port))
+    sock.bind(('127.0.0.1', port))
 
     logger.info("Listening on port %d" % (port,))
 
