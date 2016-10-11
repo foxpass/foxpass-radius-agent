@@ -35,18 +35,22 @@ import traceback
 import duo_client
 from pyrad.packet import AuthPacket, AccessAccept, AccessReject
 
-import agent_config
+import radius_agent_config
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 MAX_PACKET_SIZE = 8192
 
 def auth_with_foxpass(username, password):
     data = {'username': username, 'password': password}
-    headers = {'Authorization': 'Token %s' % agent_config.API_KEY }
-    reply = requests.post(agent_config.API_SERVER + '/v1/authn/', data=json.dumps(data), headers=headers)
+    headers = {'Authorization': 'Token %s' % radius_agent_config.API_KEY }
+    reply = requests.post(radius_agent_config.API_SERVER + '/v1/authn/', data=json.dumps(data), headers=headers)
     data = reply.json()
+
+    # format examples:
+    # {u'status': u'ok'}
+    # {u'status': u'error', u'message': u'Incorrect password'}
 
     if not data:
         raise Exception("Unknown error")
@@ -61,7 +65,7 @@ def auth_with_foxpass(username, password):
 
         raise Exception(data['message'])
 
-    if 'status' in data and data['status'] == 'ok':
+    if data['status'] == 'ok':
         return True
 
     return False
@@ -69,15 +73,15 @@ def auth_with_foxpass(username, password):
 
 def two_factor(username):
     # if Duo is not configured, return success
-    if not agent_config.DUO_API_HOST or \
-       not agent_config.DUO_IKEY or \
-       not agent_config.DUO_SKEY:
+    if not radius_agent_config.DUO_API_HOST or \
+       not radius_agent_config.DUO_IKEY or \
+       not radius_agent_config.DUO_SKEY:
         return True
 
     auth_api = duo_client.Auth(
-        ikey=agent_config.DUO_IKEY,
-        skey=agent_config.DUO_SKEY,
-        host=agent_config.DUO_API_HOST
+        ikey=radius_agent_config.DUO_IKEY,
+        skey=radius_agent_config.DUO_SKEY,
+        host=radius_agent_config.DUO_API_HOST
     )
 
     response = auth_api.auth('push',
@@ -90,7 +94,7 @@ def two_factor(username):
 
     # deny returns:
     # {u'status': u'deny', u'status_msg': u'Login request denied.', u'result': u'deny'}
-    if response and response['status'] == 'allow':
+    if response and response['result'] == 'allow':
         return True
 
     logger.info("Duo failed")
@@ -98,13 +102,14 @@ def two_factor(username):
 
 
 def group_match(username):
-    if not agent_config.REQUIRE_GROUPS:
+    # if no groups were specified in the config, then allow access
+    if not radius_agent_config.REQUIRE_GROUPS:
         return True
 
-    allowed_set = set(agent_config.REQUIRE_GROUPS)
+    allowed_set = set(radius_agent_config.REQUIRE_GROUPS)
 
-    headers = {'Authorization': 'Token %s' % agent_config.API_KEY }
-    reply = requests.get(agent_config.API_SERVER + '/v1/users/' + username + '/groups/', headers=headers)
+    headers = {'Authorization': 'Token %s' % radius_agent_config.API_KEY }
+    reply = requests.get(radius_agent_config.API_SERVER + '/v1/users/' + username + '/groups/', headers=headers)
     data = reply.json()
 
     groups = data['data']
@@ -118,7 +123,7 @@ def group_match(username):
     if user_set.intersection(allowed_set):
         return True
 
-    logger.info("User is not in an allowed group.")
+    logger.info("User %s is not in one of allowed groups (%s)." % (username, list(allowed_set)))
     return False
 
 
@@ -131,6 +136,7 @@ def process_request(data, address, secret):
 
     try:
         username = pkt.get(1)[0]
+        logger.info("Auth attempt for '%s'" % (username,))
         try:
             password = pkt.PwDecrypt(pkt.get(2)[0])
         except UnicodeDecodeError:
@@ -141,11 +147,11 @@ def process_request(data, address, secret):
         auth_status = auth_with_foxpass(username, password) and group_match(username) and two_factor(username)
 
         if auth_status:
-            logger.info('Successful auth')
+            logger.info("Successful auth for '%s'" % (username,))
             reply_pkt.code = AccessAccept
             return reply_pkt.ReplyPacket()
 
-        logger.info('Authentication failed')
+        logger.info("Authentication failed for '%s'" % (username,))
         error_message = 'Authentication failed'
 
     except Exception as e:
@@ -162,7 +168,7 @@ def run_agent(port, secret):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # start listening
-    sock.bind(('0.0.0.0', port))
+    sock.bind(('127.0.0.1', port))
 
     logger.info("Listening on port %d" % (port,))
 
@@ -181,4 +187,4 @@ def run_agent(port, secret):
 
 
 if __name__ == '__main__':
-    run_agent(agent_config.PORT, agent_config.RADIUS_SECRET)
+    run_agent(radius_agent_config.PORT, radius_agent_config.RADIUS_SECRET)
