@@ -26,6 +26,7 @@
 # radtest <user_name> <user_password> localhost:1812 1 <radius_secret>
 #
 
+import argparse
 import json
 import logging
 import requests
@@ -34,18 +35,20 @@ import traceback
 
 import duo_client
 from pyrad.packet import AuthPacket, AccessAccept, AccessReject
-
-import radius_agent_config
+import ConfigParser
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 MAX_PACKET_SIZE = 8192
+DEFAULT_API_HOST = 'https://api.foxpass.com'
+
+CONFIG = ConfigParser.SafeConfigParser()
 
 def auth_with_foxpass(username, password):
     data = {'username': username, 'password': password}
-    headers = {'Authorization': 'Token %s' % radius_agent_config.API_KEY }
-    reply = requests.post(radius_agent_config.API_SERVER + '/v1/authn/', data=json.dumps(data), headers=headers)
+    headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
+    reply = requests.post(get_config_item('api_host', DEFAULT_API_HOST) + '/v1/authn/', data=json.dumps(data), headers=headers)
     data = reply.json()
 
     # format examples:
@@ -73,15 +76,16 @@ def auth_with_foxpass(username, password):
 
 def two_factor(username):
     # if Duo is not configured, return success
-    if not radius_agent_config.DUO_API_HOST or \
-       not radius_agent_config.DUO_IKEY or \
-       not radius_agent_config.DUO_SKEY:
+    if not get_config_item('duo_api_host') or \
+       not get_config_item('duo_ikey') or \
+       not get_config_item('duo_skey'):
+        logger.info("Duo not configured")
         return True
 
     auth_api = duo_client.Auth(
-        ikey=radius_agent_config.DUO_IKEY,
-        skey=radius_agent_config.DUO_SKEY,
-        host=radius_agent_config.DUO_API_HOST
+        ikey=get_config_item('duo_ikey'),
+        skey=get_config_item('duo_skey'),
+        host=get_config_item('duo_api_host')
     )
 
     response = auth_api.auth('push',
@@ -102,14 +106,18 @@ def two_factor(username):
 
 
 def group_match(username):
+    require_groups = get_config_item('require_groups')
+
     # if no groups were specified in the config, then allow access
-    if not radius_agent_config.REQUIRE_GROUPS:
+    if not require_groups:
         return True
 
-    allowed_set = set(radius_agent_config.REQUIRE_GROUPS)
+    allowed_set = set([name.strip() for name in require_groups.split(',')])
 
-    headers = {'Authorization': 'Token %s' % radius_agent_config.API_KEY }
-    reply = requests.get(radius_agent_config.API_SERVER + '/v1/users/' + username + '/groups/', headers=headers)
+    print allowed_set
+
+    headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
+    reply = requests.get(get_config_item('api_server', DEFAULT_API_HOST) + '/v1/users/' + username + '/groups/', headers=headers)
     data = reply.json()
 
     groups = data['data']
@@ -186,5 +194,24 @@ def run_agent(port, secret):
             traceback.print_exc()
 
 
+def get_config_item(name, default=None):
+    section = 'default'
+
+    if not CONFIG.has_option(section, name):
+        return default
+
+    return CONFIG.get(section, name)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', dest='config_file', help='Config file', default='/etc/foxpass-radius-agent.conf')
+    args = parser.parse_args()
+
+    CONFIG.readfp(open(args.config_file))
+    run_agent(int(get_config_item('port', 1812)),
+              get_config_item('radius_secret'))
+
+
 if __name__ == '__main__':
-    run_agent(radius_agent_config.PORT, radius_agent_config.RADIUS_SECRET)
+    main()
