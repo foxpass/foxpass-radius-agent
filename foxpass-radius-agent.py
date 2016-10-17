@@ -146,7 +146,13 @@ def process_request(data, address, secret):
         username = pkt.get(1)[0]
         logger.info("Auth attempt for '%s'" % (username,))
         try:
-            password = pkt.PwDecrypt(pkt.get(2)[0])
+            password = pkt.get(2)
+            if not password:
+                logger.error("No password field in request")
+                reply_pkt.code = AccessReject
+                return reply_pkt.ReplyPacket()
+
+            password = pkt.PwDecrypt(password[0])
         except UnicodeDecodeError:
             logger.error("Error decrypting password -- probably incorrect secret")
             reply_pkt.code = AccessReject
@@ -164,21 +170,21 @@ def process_request(data, address, secret):
 
     except Exception as e:
         logger.exception(e)
-        error_message = 'Unknown error'
+        error_message = str(e)
 
     if error_message:
         reply_pkt.AddAttribute(18, error_message)
     return reply_pkt.ReplyPacket()
 
 
-def run_agent(port, secret):
+def run_agent(address, port, secret):
     # create socket & establish verification url
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # start listening
-    sock.bind(('127.0.0.1', port))
+    sock.bind((address, port))
 
-    logger.info("Listening on port %d" % (port,))
+    logger.info("Listening on port %s:%d" % (address, port,))
 
     while True:
         try:
@@ -209,8 +215,19 @@ def main():
     args = parser.parse_args()
 
     CONFIG.readfp(open(args.config_file))
-    run_agent(int(get_config_item('port', 1812)),
-              get_config_item('radius_secret'))
+
+    secret = get_config_item('radius_secret')
+    if not secret:
+        print "ERROR: radius_secret must be set in config file."
+        return
+
+    if not get_config_item('api_key'):
+        print "ERROR: api_key must be set in config file."
+        return
+
+    run_agent(get_config_item('address', '127.0.0.1'),
+              int(get_config_item('port', 1812)),
+              secret)
 
 
 if __name__ == '__main__':

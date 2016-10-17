@@ -6,6 +6,9 @@ radius_secret =
 # Get a new API key from the Foxpass console
 api_key = 
 
+# 127.0.0.1 is the default address. Use 0.0.0.0 for all interfaces
+# address = 0.0.0.0
+
 # Port 1812 is the standard RADIUS port
 # port = 1812
 
