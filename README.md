@@ -4,7 +4,7 @@ The Foxpass RADIUS agent is a simple RADIUS server that authenticates against Fo
 
 It speaks a version of RADIUS that is not suitable for use on the open Internet.
 
-Unlike the Foxpass RADIUS agent, it has configuration parameters to enforce group membership and Duo 2-factor.
+Unlike the Foxpass RADIUS proxy, it has configuration parameters to enforce group membership and Duo 2-factor.
 
 ### How to install it
 
