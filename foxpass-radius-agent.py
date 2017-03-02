@@ -26,6 +26,11 @@
 # radtest <user_name> <user_password> localhost:1812 1 <radius_secret>
 #
 
+# THIS NEEDS TO BE DONE FIRST
+# monkey patch for gevent
+from gevent import monkey
+monkey.patch_all()
+
 import argparse
 import json
 import logging
@@ -33,11 +38,14 @@ import requests
 import socket
 import traceback
 
+from gevent.server import DatagramServer
+
 import duo_client
 from pyrad.packet import AuthPacket, AccessAccept, AccessReject
 import ConfigParser
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)-8s %(message)s')
 logger = logging.getLogger(__name__)
 
 MAX_PACKET_SIZE = 8192
@@ -45,10 +53,22 @@ DEFAULT_API_HOST = 'https://api.foxpass.com'
 
 CONFIG = ConfigParser.SafeConfigParser()
 
+
+def get_config_item(name, default=None):
+    section = 'default'
+
+    if not CONFIG.has_option(section, name):
+        return default
+
+    return CONFIG.get(section, name)
+
+
 def auth_with_foxpass(username, password):
     data = {'username': username, 'password': password}
     headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
-    reply = requests.post(get_config_item('api_host', DEFAULT_API_HOST) + '/v1/authn/', data=json.dumps(data), headers=headers)
+    url = get_config_item('api_host', DEFAULT_API_HOST) + '/v1/authn/'
+    logger.info('API request to {}'.format(url))
+    reply = requests.post(url, data=json.dumps(data), headers=headers)
     data = reply.json()
 
     # format examples:
@@ -114,8 +134,6 @@ def group_match(username):
 
     allowed_set = set([name.strip() for name in require_groups.split(',')])
 
-    print allowed_set
-
     headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
     reply = requests.get(get_config_item('api_server', DEFAULT_API_HOST) + '/v1/users/' + username + '/groups/', headers=headers)
     data = reply.json()
@@ -177,6 +195,18 @@ def process_request(data, address, secret):
     return reply_pkt.ReplyPacket()
 
 
+class RADIUSServer(DatagramServer):
+    def __init__(self, listener, secret):
+        self.secret = secret
+        super(RADIUSServer, self).__init__(listener)
+
+    def handle(self, data, address):
+        logger.info('received %d bytes from %s' % (len(data), address))
+        response_data = process_request(data, address, self.secret)
+        self.socket.sendto(response_data, address)
+        logger.info('sent %d bytes to %s' % (len(response_data), address))
+
+
 def run_agent(address, port, secret):
     # create socket & establish verification url
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -186,27 +216,8 @@ def run_agent(address, port, secret):
 
     logger.info("Listening on port %s:%d" % (address, port,))
 
-    while True:
-        try:
-            # read data
-            data, address = sock.recvfrom(MAX_PACKET_SIZE)
-            logger.info('received %d bytes from %s' % (len(data), address))
-            response_data = process_request(data, address, secret)
-            sock.sendto(response_data, address)
-            logger.info('sent %d bytes to %s' % (len(response_data), address))
-        except KeyboardInterrupt:
-            return
-        except Exception as e:
-            traceback.print_exc()
-
-
-def get_config_item(name, default=None):
-    section = 'default'
-
-    if not CONFIG.has_option(section, name):
-        return default
-
-    return CONFIG.get(section, name)
+    server = RADIUSServer(sock, secret)
+    server.serve_forever()
 
 
 def main():
@@ -218,11 +229,11 @@ def main():
 
     secret = get_config_item('radius_secret')
     if not secret:
-        print "ERROR: radius_secret must be set in config file."
+        logger.error("ERROR: radius_secret must be set in config file.")
         return
 
     if not get_config_item('api_key'):
-        print "ERROR: api_key must be set in config file."
+        logger.error("ERROR: api_key must be set in config file.")
         return
 
     run_agent(get_config_item('address', '127.0.0.1'),

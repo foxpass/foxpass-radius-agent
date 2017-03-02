@@ -10,6 +10,8 @@ Unlike the Foxpass RADIUS proxy, it has configuration parameters to enforce grou
 
 (Assuming Ubuntu; please create a pull request for other distros!)
 
+* Install the pre-reqs
+  * `pip install -r requirements.txt`
 * Install the upstart script
   * `sudo cp upstart/foxpass-radius-agent.conf /etc/init/`
 * Install the sample config file
