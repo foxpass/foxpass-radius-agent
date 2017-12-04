@@ -311,7 +311,7 @@ def run_agent(address, port, secret):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', dest='config_file', help='Config file', default='./foxpass-radius-agent.conf')
+    parser.add_argument('-c', dest='config_file', help='Config file', default='/etc/foxpass-radius-agent.conf')
     args = parser.parse_args()
 
     CONFIG.readfp(open(args.config_file))
