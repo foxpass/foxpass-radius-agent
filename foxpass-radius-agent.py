@@ -36,6 +36,7 @@ import json
 import logging
 import requests
 import socket
+import time
 import traceback
 
 from gevent.server import DatagramServer
@@ -69,6 +70,10 @@ def auth_with_foxpass(username, password):
     url = get_config_item('api_host', DEFAULT_API_HOST) + '/v1/authn/'
     logger.info('API request to {}'.format(url))
     reply = requests.post(url, data=json.dumps(data), headers=headers)
+
+    # raise exception if Foxpass returns an error
+    reply.raise_for_status()
+
     data = reply.json()
 
     # format examples:
@@ -95,6 +100,23 @@ def auth_with_foxpass(username, password):
 
 
 def two_factor(username):
+    # get mfa type
+    mfa_type = get_config_item('mfa_type')
+    if mfa_type == 'okta':
+        return okta_mfa(username)
+    # backwards compatibility for clients with implicit duo config
+    elif mfa_type == 'duo' or \
+        (get_config_item('duo_api_host') or \
+         get_config_item('duo_ikey') or \
+         get_config_item('duo_skey')):
+        return duo_mfa(username)
+
+    # if MFA is not configured, return success
+    logger.info("MFA not configured")
+    return True
+
+
+def duo_mfa(username):
     # if Duo is not configured, return success
     if not get_config_item('duo_api_host') or \
        not get_config_item('duo_ikey') or \
@@ -121,9 +143,76 @@ def two_factor(username):
     if response and response['result'] == 'allow':
         return True
 
-    logger.info("Duo failed")
+    logger.info("Duo mfa failed")
     return False
 
+def okta_mfa(username):
+    # if Duo is not configured, return success
+    if not get_config_item('okta_hostname') or \
+       not get_config_item('okta_apikey'):
+        logger.info("Okta MFA not configured")
+        return True
+
+    hostname = get_config_item('okta_hostname')
+    api_key = get_config_item('okta_apikey')
+
+    # optional timeout on requests, not related to overall transaction
+    timeout = get_config_item('okta_request_timeout')
+    if not timeout:
+        timeout = 60
+
+    headers = {'Content-type': 'application/json', 'Accept': 'application/json', 'Authorization': 'SSWS %s' % api_key}
+
+    # get the user id from okta
+    url = "https://%s/api/v1/users/%s" % (hostname, username,)
+    resp_json = okta_request(url, headers, timeout)
+
+    if not 'id' in resp_json:
+        logger.info("No Okta user found")
+        return False
+
+    okta_id = resp_json['id']
+
+    # get the factors from okta, look for the push factor
+    url = "https://%s/api/v1/users/%s/factors" % (hostname, okta_id,)
+    resp_json = okta_request(url, headers, timeout)
+    fid = None
+    for factor in resp_json:
+        if factor['provider'] == 'OKTA' and factor['factorType'] == 'push':
+            url = factor['_links']['verify']['href']
+            fid = factor['id']
+            break
+
+    if not fid:
+        logger.info("No Okta push mfa set up")
+        return False
+
+    # start a new verify transaction
+    resp_json = okta_request(url, headers, timeout, post=True)
+
+    # poll for transaction completion
+    while True:
+        if resp_json['factorResult'] == 'SUCCESS':
+            return True
+        elif resp_json['factorResult'] == 'WAITING':
+            url = resp_json['_links']['poll']['href']
+            # sleep for 1 second to rate limit requests
+            time.sleep(1)
+            resp_json = okta_request(url, headers, timeout)
+        else:
+            break
+
+    logger.info("Okta mfa failed")
+    return False
+
+def okta_request(url, headers, timeout, post=False):
+    if post:
+        r = requests.post(url, headers=headers, timeout=timeout)
+    else:
+        r = requests.get(url, headers=headers, timeout=timeout)
+    r.raise_for_status()
+
+    return json.loads(r.text)
 
 def group_match(username):
     require_groups = get_config_item('require_groups')
@@ -222,7 +311,7 @@ def run_agent(address, port, secret):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', dest='config_file', help='Config file', default='/etc/foxpass-radius-agent.conf')
+    parser.add_argument('-c', dest='config_file', help='Config file', default='./foxpass-radius-agent.conf')
     args = parser.parse_args()
 
     CONFIG.readfp(open(args.config_file))
