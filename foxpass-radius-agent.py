@@ -36,7 +36,6 @@ import json
 import logging
 import requests
 import socket
-import time
 import traceback
 
 from gevent.server import DatagramServer
@@ -147,7 +146,7 @@ def duo_mfa(username):
     return False
 
 def okta_mfa(username):
-    # if Duo is not configured, return success
+    # if Okta is not configured, return success
     if not get_config_item('okta_hostname') or \
        not get_config_item('okta_apikey'):
         logger.info("Okta MFA not configured")
@@ -157,9 +156,7 @@ def okta_mfa(username):
     api_key = get_config_item('okta_apikey')
 
     # optional timeout on requests, not related to overall transaction
-    timeout = get_config_item('okta_request_timeout')
-    if not timeout:
-        timeout = 60
+    timeout = get_config_item('okta_request_timeout', default=60)
 
     headers = {'Content-type': 'application/json', 'Accept': 'application/json', 'Authorization': 'SSWS %s' % api_key}
 
@@ -197,7 +194,7 @@ def okta_mfa(username):
         elif resp_json['factorResult'] == 'WAITING':
             url = resp_json['_links']['poll']['href']
             # sleep for 1 second to rate limit requests
-            time.sleep(1)
+            time.sleep(1.0)
             resp_json = okta_request(url, headers, timeout)
         else:
             break
