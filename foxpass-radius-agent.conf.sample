@@ -30,4 +30,3 @@ api_key =
 # If you want to use Okta, enter your parameters here.
 # okta_hostname =
 # okta_apikey =
-# okta_request_timeout = <optional>
