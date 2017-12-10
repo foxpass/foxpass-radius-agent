@@ -156,14 +156,11 @@ def okta_mfa(username):
     hostname = get_config_item('okta_hostname')
     api_key = get_config_item('okta_apikey')
 
-    # optional timeout on requests, not related to overall transaction
-    timeout = get_config_item('okta_request_timeout', default=60)
-
     headers = {'Content-type': 'application/json', 'Accept': 'application/json', 'Authorization': 'SSWS %s' % api_key}
 
     # get the user id from okta
     url = "https://%s/api/v1/users/%s" % (hostname, username,)
-    resp_json = okta_request(url, headers, timeout)
+    resp_json = okta_request(url, headers)
 
     if not 'id' in resp_json:
         logger.info("No Okta user found")
@@ -173,7 +170,7 @@ def okta_mfa(username):
 
     # get the factors from okta, look for the push factor
     url = "https://%s/api/v1/users/%s/factors" % (hostname, okta_id,)
-    resp_json = okta_request(url, headers, timeout)
+    resp_json = okta_request(url, headers)
     fid = None
     for factor in resp_json:
         if factor['provider'] == 'OKTA' and factor['factorType'] == 'push':
@@ -186,7 +183,7 @@ def okta_mfa(username):
         return False
 
     # start a new verify transaction
-    resp_json = okta_request(url, headers, timeout, post=True)
+    resp_json = okta_request(url, headers, post=True)
 
     # poll for transaction completion
     while True:
@@ -196,18 +193,18 @@ def okta_mfa(username):
             url = resp_json['_links']['poll']['href']
             # sleep for 1 second to rate limit requests
             time.sleep(1.0)
-            resp_json = okta_request(url, headers, timeout)
+            resp_json = okta_request(url, headers)
         else:
             break
 
     logger.info("Okta mfa failed")
     return False
 
-def okta_request(url, headers, timeout, post=False):
+def okta_request(url, headers, post=False):
     if post:
-        r = requests.post(url, headers=headers, timeout=timeout)
+        r = requests.post(url, headers=headers, timeout=60)
     else:
-        r = requests.get(url, headers=headers, timeout=timeout)
+        r = requests.get(url, headers=headers, timeout=60)
     r.raise_for_status()
 
     return json.loads(r.text)
