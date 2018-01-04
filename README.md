@@ -12,6 +12,8 @@ Unlike the Foxpass RADIUS proxy, it has configuration parameters to enforce grou
 
 * Install the pre-reqs
   * `pip install -r requirements.txt`
+* Install the tool
+  * `sudo cp foxpass-radius-agent.py /usr/local/bin/`
 * Install the upstart script
   * `sudo cp upstart/foxpass-radius-agent.conf /etc/init/`
 * Install the sample config file
@@ -21,40 +23,84 @@ Unlike the Foxpass RADIUS proxy, it has configuration parameters to enforce grou
 * Run it
   * `sudo service foxpass-radius-agent start`
 
-  SysV
-  =====
+SysV
+=====
 
-  Script installation
-  ------------
-  Install the start script
-  ```
-  sudo mv sysv/foxpass-radius-agent /etc/init.d/foxpass-radius-agent
-  ```
+Script installation
+------------
+Install the start script
+```
+sudo mv sysv/foxpass-radius-agent /etc/init.d/foxpass-radius-agent
+```
 
-  Script usage
-  ------------
+Script usage
+------------
 
-  ### Start ###
+### Start ###
 
-  Starts the app.
+Starts the app.
 
-      /etc/init.d/foxpass-radius-agent start
+    /etc/init.d/foxpass-radius-agent start
 
-  ### Stop ###
+### Stop ###
 
-  Stops the app.
+Stops the app.
 
-      /etc/init.d/foxpass-radius-agent stop
+    /etc/init.d/foxpass-radius-agent stop
 
-  ### Restart ###
+### Restart ###
 
-  Restarts the app.
+Restarts the app.
 
-      /etc/init.d/foxpass-radius-agent restart
+    /etc/init.d/foxpass-radius-agent restart
 
-  ### Status ###
+### Status ###
 
-  Tells you whether the app is running. Exits with _0_ if it is and _1_
-  otherwise.
+Tells you whether the app is running. Exits with _0_ if it is and _1_
+otherwise.
 
-      /etc/init.d/foxpass-radius-agent status
+    /etc/init.d/foxpass-radius-agent status
+
+Systemd
+=====
+
+Script installation
+------------
+Install the control script
+```
+sudo mv systemd/foxpass-radius-agent.service /lib/systemd/system/
+sudo systemctl enable foxpass-radius-agent.service
+```
+
+Script usage
+------------
+
+### Start ###
+
+Starts the app.
+
+      sudo systemctl start foxpass-radius-agent
+
+### Stop ###
+
+Stops the app.
+
+      sudo systemctl stop foxpass-radius-agent
+
+### Restart ###
+
+Restarts the app.
+
+      sudo systemctl restart foxpass-radius-agent
+
+### Status ###
+
+Tells you some statistics about the process and its current state.
+
+      sudo systemctl status foxpass-radius-agent
+
+### Logs ###
+
+Messaging handled by journald; access the output using journal
+
+      journalctl -u foxpass-radius-agent.service
