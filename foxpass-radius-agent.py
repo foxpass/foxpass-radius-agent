@@ -156,7 +156,10 @@ def okta_mfa(username):
     hostname = get_config_item('okta_hostname')
     api_key = get_config_item('okta_apikey')
 
-    headers = {'Content-type': 'application/json', 'Accept': 'application/json', 'Authorization': 'SSWS %s' % api_key}
+    headers = {'Accept': 'application/json',
+               'Authorization': 'SSWS %s' % api_key,
+               'Content-Type': 'application/json',
+               'User-Agent': 'FoxpassRadiusAgent/1.0'}
 
     # get the user id from okta
     url = "https://%s/api/v1/users/%s" % (hostname, username,)
