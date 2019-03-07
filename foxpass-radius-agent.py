@@ -72,13 +72,15 @@ def auth_with_foxpass(username, password):
     reply = requests.post(url, data=json.dumps(data), headers=headers)
 
     # raise exception if Foxpass returns an error
-    reply.raise_for_status()
+    # (other than a 400, which means invalid password)
+    if reply.status_code != 400:
+        reply.raise_for_status()
 
     data = reply.json()
 
     # format examples:
-    # {u'status': u'ok'}
-    # {u'status': u'error', u'message': u'Incorrect password'}
+    # 200: {u'status': u'ok'}
+    # 400: {u'status': u'error', u'message': u'Incorrect password'}
 
     if not data:
         raise Exception("Unknown error")
