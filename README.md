@@ -104,3 +104,13 @@ Tells you some statistics about the process and its current state.
 Messaging handled by journald; access the output using journal
 
       journalctl -u foxpass-radius-agent.service
+
+### Testing ###
+
+The freeradius-utils package has a utility called `radtest`
+
+Once the RADIUS agent is installed, it can be tested with:
+
+`radtest <username> <password> localhost 1 <secret>`
+
+The secret can be found in the /etc/foxpass-radius-agent.conf file.
