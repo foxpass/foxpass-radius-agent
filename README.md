@@ -105,7 +105,8 @@ Messaging handled by journald; access the output using journal
 
       journalctl -u foxpass-radius-agent.service
 
-### Testing ###
+Testing
+=====
 
 The freeradius-utils package has a utility called `radtest`
 
