@@ -226,7 +226,14 @@ def group_match(username):
     headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
     reply = requests.get(get_config_item('api_server', DEFAULT_API_HOST) + '/v1/users/' + username + '/groups/', headers=headers)
     data = reply.json()
-
+    if not data:
+        logger.info("No group data returned for user: %s" % (username))
+        return False
+ 
+    if 'data' not in data:
+        logger.info("Unexpected response for user: %s - %s" % (username, data))
+        return False
+ 
     groups = data['data']
 
     user_set = set()
