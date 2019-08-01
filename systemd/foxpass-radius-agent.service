@@ -3,7 +3,7 @@ Description=Foxpass RADIUS agent
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python /usr/local/bin/foxpass-radius-agent.py
+ExecStart=/usr/bin/python -u /usr/local/bin/foxpass-radius-agent.py
 Restart=always
 Type=simple
 User=nobody

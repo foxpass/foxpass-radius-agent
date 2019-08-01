@@ -30,7 +30,7 @@ Script installation
 ------------
 Install the start script
 ```
-sudo mv sysv/foxpass-radius-agent /etc/init.d/foxpass-radius-agent
+sudo cp sysv/foxpass-radius-agent /etc/init.d/foxpass-radius-agent
 ```
 
 Script usage
@@ -68,7 +68,7 @@ Script installation
 ------------
 Install the control script
 ```
-sudo mv systemd/foxpass-radius-agent.service /lib/systemd/system/
+sudo cp systemd/foxpass-radius-agent.service /lib/systemd/system/
 sudo systemctl enable foxpass-radius-agent.service
 ```
 

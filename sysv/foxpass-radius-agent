@@ -10,7 +10,7 @@
 ### END INIT INFO
 
 dir="/usr/local/bin"
-cmd="python /usr/local/bin/foxpass-radius-agent.py"
+cmd="python -u /usr/local/bin/foxpass-radius-agent.py"
 user=""
 
 name=`basename $0`

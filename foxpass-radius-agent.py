@@ -226,7 +226,14 @@ def group_match(username):
     headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
     reply = requests.get(get_config_item('api_server', DEFAULT_API_HOST) + '/v1/users/' + username + '/groups/', headers=headers)
     data = reply.json()
-
+    if not data:
+        logger.info("No group data returned for user: %s" % (username))
+        return False
+ 
+    if 'data' not in data:
+        logger.info("Unexpected response for user: %s - %s" % (username, data))
+        return False
+ 
     groups = data['data']
 
     user_set = set()
@@ -252,6 +259,9 @@ def process_request(data, address, secret):
     try:
         username = pkt.get(1)[0]
         logger.info("Auth attempt for '%s'" % (username,))
+        if "@" in username:
+            # we don't expect email addresses - just usernames
+            username = username.split("@")[0]
         try:
             password = pkt.get(2)
             if not password:
