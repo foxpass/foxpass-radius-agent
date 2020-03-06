@@ -50,8 +50,7 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 MAX_PACKET_SIZE = 8192
-#DEFAULT_API_HOST = 'https://api.foxpass.com'
-DEFAULT_API_HOST = 'http://172.17.0.2:8001/api'
+DEFAULT_API_HOST = 'https://api.foxpass.com'
 
 CONFIG = ConfigParser.SafeConfigParser()
 
