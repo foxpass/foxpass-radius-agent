@@ -43,7 +43,7 @@ from gevent.server import DatagramServer
 
 import duo_client
 from pyrad.packet import AuthPacket, AccessAccept, AccessReject
-import ConfigParser
+from six.moves import configparser as ConfigParser
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)-8s %(message)s')
@@ -258,6 +258,7 @@ def process_request(data, address, secret):
 
     try:
         username = pkt.get(1)[0]
+        username = username.decode('utf-8')
         logger.info("Auth attempt for '%s'" % (username,))
         if "@" in username:
             # we don't expect email addresses - just usernames
@@ -290,7 +291,7 @@ def process_request(data, address, secret):
         error_message = str(e)
 
     if error_message:
-        reply_pkt.AddAttribute(18, error_message)
+        reply_pkt.AddAttribute(18, error_message.encode('utf-8'))
     return reply_pkt.ReplyPacket()
 
 
@@ -327,6 +328,8 @@ def main():
     CONFIG.readfp(open(args.config_file))
 
     secret = get_config_item('radius_secret')
+    secret = secret.encode('utf-8')
+
     if not secret:
         logger.error("ERROR: radius_secret must be set in config file.")
         return
