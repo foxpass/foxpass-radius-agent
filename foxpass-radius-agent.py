@@ -224,7 +224,9 @@ def group_match(username):
     allowed_set = set([name.strip() for name in require_groups.split(',')])
 
     headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
-    reply = requests.get(get_config_item('api_server', DEFAULT_API_HOST) + '/v1/users/' + username + '/groups/', headers=headers)
+    url = get_config_item('api_host', DEFAULT_API_HOST) + '/v1/users/' + username + '/groups/'
+    logger.info('API request to {}'.format(url))
+    reply = requests.get(url, headers=headers)
     data = reply.json()
     if not data:
         logger.info("No group data returned for user: %s" % (username))
