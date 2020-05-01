@@ -107,9 +107,9 @@ def two_factor(username):
     if mfa_type == 'okta':
         return okta_mfa(username)
     # backwards compatibility for clients with implicit duo config
-    elif mfa_type == 'duo'
-    or (get_config_item('duo_api_host')
-        or get_config_item('duo_ikey')
+    elif mfa_type == 'duo' \
+        or (get_config_item('duo_api_host')
+            or get_config_item('duo_ikey')
             or get_config_item('duo_skey')):
         return duo_mfa(username)
 
