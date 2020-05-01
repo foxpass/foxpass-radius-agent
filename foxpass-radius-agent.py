@@ -66,7 +66,7 @@ def get_config_item(name, default=None):
 
 def auth_with_foxpass(username, password):
     data = {'username': username, 'password': password}
-    headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
+    headers = {'Authorization': 'Token %s' % get_config_item('api_key')}
     url = get_config_item('api_host', DEFAULT_API_HOST) + '/v1/authn/'
     logger.info('API request to {}'.format(url))
     reply = requests.post(url, data=json.dumps(data), headers=headers)
@@ -85,7 +85,7 @@ def auth_with_foxpass(username, password):
     if not data:
         raise Exception("Unknown error")
 
-    if not 'status' in data:
+    if 'status' not in data:
         raise Exception("Unknown error")
 
     if data['status'] == 'error':
@@ -107,10 +107,10 @@ def two_factor(username):
     if mfa_type == 'okta':
         return okta_mfa(username)
     # backwards compatibility for clients with implicit duo config
-    elif mfa_type == 'duo' or \
-        (get_config_item('duo_api_host') or \
-         get_config_item('duo_ikey') or \
-         get_config_item('duo_skey')):
+    elif mfa_type == 'duo'
+    or (get_config_item('duo_api_host')
+        or get_config_item('duo_ikey')
+            or get_config_item('duo_skey')):
         return duo_mfa(username)
 
     # if MFA is not configured, return success
@@ -135,7 +135,7 @@ def duo_mfa(username):
     response = auth_api.auth('push',
                              username=username,
                              device='auto',
-                             async=False)
+                             async_txn=False)
 
     # success returns:
     # {u'status': u'allow', u'status_msg': u'Success. Logging you in...', u'result': u'allow'}
@@ -147,6 +147,7 @@ def duo_mfa(username):
 
     logger.info("Duo mfa failed")
     return False
+
 
 def okta_mfa(username):
     # if Okta is not configured, return success
@@ -167,7 +168,7 @@ def okta_mfa(username):
     url = "https://%s/api/v1/users/%s" % (hostname, username,)
     resp_json = okta_request(url, headers)
 
-    if not 'id' in resp_json:
+    if 'id' not in resp_json:
         logger.info("No Okta user found")
         return False
 
@@ -205,6 +206,7 @@ def okta_mfa(username):
     logger.info("Okta mfa failed")
     return False
 
+
 def okta_request(url, headers, post=False):
     if post:
         r = requests.post(url, headers=headers, timeout=60)
@@ -213,6 +215,7 @@ def okta_request(url, headers, post=False):
     r.raise_for_status()
 
     return json.loads(r.text)
+
 
 def group_match(username):
     require_groups = get_config_item('require_groups')
@@ -223,7 +226,7 @@ def group_match(username):
 
     allowed_set = set([name.strip() for name in require_groups.split(',')])
 
-    headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
+    headers = {'Authorization': 'Token %s' % get_config_item('api_key')}
     url = get_config_item('api_host', DEFAULT_API_HOST) + '/v1/users/' + username + '/groups/'
     logger.info('API request to {}'.format(url))
     reply = requests.get(url, headers=headers)
@@ -231,11 +234,11 @@ def group_match(username):
     if not data:
         logger.info("No group data returned for user: %s" % (username))
         return False
- 
+
     if 'data' not in data:
         logger.info("Unexpected response for user: %s - %s" % (username, data))
         return False
- 
+
     groups = data['data']
 
     user_set = set()

@@ -1,4 +1,4 @@
-duo-client==3.0
-gevent==1.4.0
-pyrad==2.1
-requests==2.21.0
+duo-client==4.2.3
+gevent==20.4.0
+pyrad==2.3
+requests==2.23.0
