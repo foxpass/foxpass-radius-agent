@@ -64,6 +64,7 @@ ATTRIBUTE       Password                2       string
 ATTRIBUTE       Reply-Message           18      string
 """
 
+
 def get_config_item(name, default=None):
     section = 'default'
 
