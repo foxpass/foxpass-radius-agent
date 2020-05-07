@@ -26,12 +26,15 @@
 # radtest <user_name> <user_password> localhost:1812 1 <radius_secret>
 #
 
-# THIS NEEDS TO BE DONE FIRST
+from __future__ import print_function
+
+# THIS NEEDS TO BE DONE FIRST (after __future__s)
 # monkey patch for gevent
 from gevent import monkey
 monkey.patch_all()
 
 import argparse
+import io
 import json
 import logging
 import requests
@@ -43,7 +46,8 @@ from gevent.server import DatagramServer
 
 import duo_client
 from pyrad.packet import AuthPacket, AccessAccept, AccessReject
-from six.moves import configparser as ConfigParser
+from pyrad.dictionary import Dictionary
+from six.moves import configparser
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)-8s %(message)s')
@@ -52,8 +56,13 @@ logger = logging.getLogger(__name__)
 MAX_PACKET_SIZE = 8192
 DEFAULT_API_HOST = 'https://api.foxpass.com'
 
-CONFIG = ConfigParser.SafeConfigParser()
+CONFIG = configparser.ConfigParser()
 
+DICTIONARY_DATA = """
+ATTRIBUTE       User-Name               1       string
+ATTRIBUTE       Password                2       string
+ATTRIBUTE       Reply-Message           18      string
+"""
 
 def get_config_item(name, default=None):
     section = 'default'
@@ -257,24 +266,27 @@ def group_match(username):
 def process_request(data, address, secret):
     error_message = None
 
-    pkt = AuthPacket(packet=data, secret=secret, dict={})
+    pkt = AuthPacket(packet=data,
+                     secret=secret,
+                     dict=Dictionary(io.StringIO(DICTIONARY_DATA)))
     reply_pkt = pkt.CreateReply()
     reply_pkt.code = AccessReject
 
     try:
-        username = pkt.get(1)[0]
-        username = username.decode('utf-8')
+        # [0] is needed because pkt.get returns a list
+        username = pkt.get('User-Name')[0]
         logger.info("Auth attempt for '%s'" % (username,))
         if "@" in username:
             # we don't expect email addresses - just usernames
             username = username.split("@")[0]
         try:
-            password = pkt.get(2)
+            password = pkt.get('Password')
             if not password:
                 logger.error("No password field in request")
                 reply_pkt.code = AccessReject
                 return reply_pkt.ReplyPacket()
 
+            # [0] is needed because pkt.get returns a list
             password = pkt.PwDecrypt(password[0])
         except UnicodeDecodeError:
             logger.error("Error decrypting password -- probably incorrect secret")
@@ -296,7 +308,7 @@ def process_request(data, address, secret):
         error_message = str(e)
 
     if error_message:
-        reply_pkt.AddAttribute(18, error_message.encode('utf-8'))
+        reply_pkt.AddAttribute('Reply-Message', error_message)
     return reply_pkt.ReplyPacket()
 
 
@@ -330,7 +342,7 @@ def main():
     parser.add_argument('-c', dest='config_file', help='Config file', default='/etc/foxpass-radius-agent.conf')
     args = parser.parse_args()
 
-    CONFIG.readfp(open(args.config_file))
+    CONFIG.read_file(open(args.config_file))
 
     secret = get_config_item('radius_secret')
     secret = secret.encode('utf-8')
