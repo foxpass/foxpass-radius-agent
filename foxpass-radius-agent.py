@@ -26,12 +26,15 @@
 # radtest <user_name> <user_password> localhost:1812 1 <radius_secret>
 #
 
-# THIS NEEDS TO BE DONE FIRST
+from __future__ import print_function
+
+# THIS NEEDS TO BE DONE FIRST (after __future__s)
 # monkey patch for gevent
 from gevent import monkey
 monkey.patch_all()
 
 import argparse
+import io
 import json
 import logging
 import requests
@@ -43,7 +46,8 @@ from gevent.server import DatagramServer
 
 import duo_client
 from pyrad.packet import AuthPacket, AccessAccept, AccessReject
-from six.moves import configparser as ConfigParser
+from pyrad.dictionary import Dictionary
+from six.moves import configparser
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)-8s %(message)s')
@@ -52,7 +56,13 @@ logger = logging.getLogger(__name__)
 MAX_PACKET_SIZE = 8192
 DEFAULT_API_HOST = 'https://api.foxpass.com'
 
-CONFIG = ConfigParser.SafeConfigParser()
+CONFIG = configparser.ConfigParser()
+
+DICTIONARY_DATA = """
+ATTRIBUTE       User-Name               1       string
+ATTRIBUTE       Password                2       string
+ATTRIBUTE       Reply-Message           18      string
+"""
 
 
 def get_config_item(name, default=None):
@@ -66,7 +76,7 @@ def get_config_item(name, default=None):
 
 def auth_with_foxpass(username, password):
     data = {'username': username, 'password': password}
-    headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
+    headers = {'Authorization': 'Token %s' % get_config_item('api_key')}
     url = get_config_item('api_host', DEFAULT_API_HOST) + '/v1/authn/'
     logger.info('API request to {}'.format(url))
     reply = requests.post(url, data=json.dumps(data), headers=headers)
@@ -85,7 +95,7 @@ def auth_with_foxpass(username, password):
     if not data:
         raise Exception("Unknown error")
 
-    if not 'status' in data:
+    if 'status' not in data:
         raise Exception("Unknown error")
 
     if data['status'] == 'error':
@@ -107,10 +117,10 @@ def two_factor(username):
     if mfa_type == 'okta':
         return okta_mfa(username)
     # backwards compatibility for clients with implicit duo config
-    elif mfa_type == 'duo' or \
-        (get_config_item('duo_api_host') or \
-         get_config_item('duo_ikey') or \
-         get_config_item('duo_skey')):
+    elif mfa_type == 'duo' \
+        or (get_config_item('duo_api_host')
+            or get_config_item('duo_ikey')
+            or get_config_item('duo_skey')):
         return duo_mfa(username)
 
     # if MFA is not configured, return success
@@ -135,7 +145,7 @@ def duo_mfa(username):
     response = auth_api.auth('push',
                              username=username,
                              device='auto',
-                             async=False)
+                             async_txn=False)
 
     # success returns:
     # {u'status': u'allow', u'status_msg': u'Success. Logging you in...', u'result': u'allow'}
@@ -147,6 +157,7 @@ def duo_mfa(username):
 
     logger.info("Duo mfa failed")
     return False
+
 
 def okta_mfa(username):
     # if Okta is not configured, return success
@@ -167,7 +178,7 @@ def okta_mfa(username):
     url = "https://%s/api/v1/users/%s" % (hostname, username,)
     resp_json = okta_request(url, headers)
 
-    if not 'id' in resp_json:
+    if 'id' not in resp_json:
         logger.info("No Okta user found")
         return False
 
@@ -205,6 +216,7 @@ def okta_mfa(username):
     logger.info("Okta mfa failed")
     return False
 
+
 def okta_request(url, headers, post=False):
     if post:
         r = requests.post(url, headers=headers, timeout=60)
@@ -213,6 +225,7 @@ def okta_request(url, headers, post=False):
     r.raise_for_status()
 
     return json.loads(r.text)
+
 
 def group_match(username):
     require_groups = get_config_item('require_groups')
@@ -223,7 +236,7 @@ def group_match(username):
 
     allowed_set = set([name.strip() for name in require_groups.split(',')])
 
-    headers = {'Authorization': 'Token %s' % get_config_item('api_key') }
+    headers = {'Authorization': 'Token %s' % get_config_item('api_key')}
     url = get_config_item('api_host', DEFAULT_API_HOST) + '/v1/users/' + username + '/groups/'
     logger.info('API request to {}'.format(url))
     reply = requests.get(url, headers=headers)
@@ -231,11 +244,11 @@ def group_match(username):
     if not data:
         logger.info("No group data returned for user: %s" % (username))
         return False
- 
+
     if 'data' not in data:
         logger.info("Unexpected response for user: %s - %s" % (username, data))
         return False
- 
+
     groups = data['data']
 
     user_set = set()
@@ -254,24 +267,27 @@ def group_match(username):
 def process_request(data, address, secret):
     error_message = None
 
-    pkt = AuthPacket(packet=data, secret=secret, dict={})
+    pkt = AuthPacket(packet=data,
+                     secret=secret,
+                     dict=Dictionary(io.StringIO(DICTIONARY_DATA)))
     reply_pkt = pkt.CreateReply()
     reply_pkt.code = AccessReject
 
     try:
-        username = pkt.get(1)[0]
-        username = username.decode('utf-8')
+        # [0] is needed because pkt.get returns a list
+        username = pkt.get('User-Name')[0]
         logger.info("Auth attempt for '%s'" % (username,))
         if "@" in username:
             # we don't expect email addresses - just usernames
             username = username.split("@")[0]
         try:
-            password = pkt.get(2)
+            password = pkt.get('Password')
             if not password:
                 logger.error("No password field in request")
                 reply_pkt.code = AccessReject
                 return reply_pkt.ReplyPacket()
 
+            # [0] is needed because pkt.get returns a list
             password = pkt.PwDecrypt(password[0])
         except UnicodeDecodeError:
             logger.error("Error decrypting password -- probably incorrect secret")
@@ -293,7 +309,7 @@ def process_request(data, address, secret):
         error_message = str(e)
 
     if error_message:
-        reply_pkt.AddAttribute(18, error_message.encode('utf-8'))
+        reply_pkt.AddAttribute('Reply-Message', error_message)
     return reply_pkt.ReplyPacket()
 
 
@@ -327,7 +343,7 @@ def main():
     parser.add_argument('-c', dest='config_file', help='Config file', default='/etc/foxpass-radius-agent.conf')
     args = parser.parse_args()
 
-    CONFIG.readfp(open(args.config_file))
+    CONFIG.read_file(open(args.config_file))
 
     secret = get_config_item('radius_secret')
     secret = secret.encode('utf-8')
