@@ -269,7 +269,7 @@ def process_request(data, address, secret):
 
     pkt = AuthPacket(packet=data,
                      secret=secret,
-                     dict=Dictionary(io.StringIO(DICTIONARY_DATA)))
+                     dict=Dictionary(io.BytesIO(DICTIONARY_DATA)))
     reply_pkt = pkt.CreateReply()
     reply_pkt.code = AccessReject
 
@@ -343,7 +343,7 @@ def main():
     parser.add_argument('-c', dest='config_file', help='Config file', default='/etc/foxpass-radius-agent.conf')
     args = parser.parse_args()
 
-    CONFIG.read_file(open(args.config_file))
+    CONFIG.read(args.config_file)
 
     secret = get_config_item('radius_secret')
     secret = secret.encode('utf-8')
