@@ -58,7 +58,9 @@ DEFAULT_API_HOST = 'https://api.foxpass.com'
 
 CONFIG = configparser.ConfigParser()
 
-DICTIONARY_DATA = """
+# make sure this data is of type 'unicode' in py2, not str.
+# it's a no-op in py3
+DICTIONARY_DATA = u"""
 ATTRIBUTE       User-Name               1       string
 ATTRIBUTE       Password                2       string
 ATTRIBUTE       Reply-Message           18      string
@@ -269,7 +271,7 @@ def process_request(data, address, secret):
 
     pkt = AuthPacket(packet=data,
                      secret=secret,
-                     dict=Dictionary(io.BytesIO(DICTIONARY_DATA)))
+                     dict=Dictionary(io.StringIO(DICTIONARY_DATA)))
     reply_pkt = pkt.CreateReply()
     reply_pkt.code = AccessReject
 
