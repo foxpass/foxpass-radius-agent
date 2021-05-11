@@ -279,9 +279,6 @@ def process_request(data, address, secret):
         # [0] is needed because pkt.get returns a list
         username = pkt.get('User-Name')[0]
         logger.info("Auth attempt for '%s'" % (username,))
-        if "@" in username:
-            # we don't expect email addresses - just usernames
-            username = username.split("@")[0]
         try:
             password = pkt.get('Password')
             if not password:
