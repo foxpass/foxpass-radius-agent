@@ -2,3 +2,4 @@ duo-client==4.2.3
 gevent==21.8.0
 pyrad==2.4
 requests==2.26.0
+greenlet==1.1.1

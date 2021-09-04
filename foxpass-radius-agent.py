@@ -103,14 +103,17 @@ def auth_with_foxpass(username, password):
     if data['status'] == 'error':
         if data['message'] == 'Incorrect password':
             logger.info("Invalid password")
-            return False
+            return False, None
 
         raise Exception(data['message'])
 
-    if data['status'] == 'ok':
-        return True
+    if 'username' not in data:
+        raise Exception("Unknown error")
 
-    return False
+    if data['status'] == 'ok':
+        return True, data['username']
+
+    return False, None
 
 
 def two_factor(username):
@@ -284,12 +287,9 @@ def process_request(data, address, secret):
             return reply_pkt.ReplyPacket()
 
         # attributes are returned as a list
-        username = username[0]
+        pkt_username = username[0]
 
-        logger.info("Auth attempt for '%s'" % (username,))
-        if "@" in username:
-            # we don't expect email addresses - just usernames
-            username = username.split("@")[0]
+        logger.info("Auth attempt for '%s'" % (pkt_username,))
         try:
             password = pkt.get('Password')
             if not password:
@@ -304,14 +304,15 @@ def process_request(data, address, secret):
             reply_pkt.code = AccessReject
             return reply_pkt.ReplyPacket()
 
-        auth_status = auth_with_foxpass(username, password) and group_match(username) and two_factor(username)
+        (auth_status, username) = auth_with_foxpass(pkt_username, password)
+        auth_status = auth_status and group_match(username) and two_factor(username)
 
         if auth_status:
-            logger.info("Successful auth for '%s'" % (username,))
+            logger.info("Successful auth for '%s'" % (pkt_username,))
             reply_pkt.code = AccessAccept
             return reply_pkt.ReplyPacket()
 
-        logger.info("Authentication failed for '%s'" % (username,))
+        logger.info("Authentication failed for '%s'" % (pkt_username,))
         error_message = 'Authentication failed'
 
     except Exception as e:
