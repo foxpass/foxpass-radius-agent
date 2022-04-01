@@ -40,7 +40,6 @@ import logging
 import requests
 import socket
 import time
-import traceback
 
 from gevent.server import DatagramServer
 
@@ -116,11 +115,11 @@ def auth_with_foxpass(username, password):
     return False, None
 
 
-def two_factor(username):
+def two_factor(username, pkt_username):
     # get mfa type
     mfa_type = get_config_item('mfa_type')
     if mfa_type == 'okta':
-        return okta_mfa(username)
+        return okta_mfa(username, pkt_username)
     # backwards compatibility for clients with implicit duo config
     elif mfa_type == 'duo' \
         or (get_config_item('duo_api_host')
@@ -164,7 +163,7 @@ def duo_mfa(username):
     return False
 
 
-def okta_mfa(username):
+def okta_mfa(username, pkt_username):
     # if Okta is not configured, return success
     if not get_config_item('okta_hostname') or \
        not get_config_item('okta_apikey'):
@@ -184,8 +183,15 @@ def okta_mfa(username):
     resp_json = okta_request(url, headers)
 
     if 'id' not in resp_json:
-        logger.info("No Okta user found")
-        return False
+        logger.info("No Okta user found by foxpass username")
+
+        # try again with the provided pkt username, may be email address
+        url = "https://%s/api/v1/users/%s" % (hostname, pkt_username,)
+        resp_json = okta_request(url, headers)
+
+        if 'id' not in resp_json:
+            logger.info("No Okta user found by pkt_username")
+            return False
 
     okta_id = resp_json['id']
 
@@ -297,7 +303,7 @@ def process_request(data, address, secret):
             return reply_pkt.ReplyPacket()
 
         (auth_status, username) = auth_with_foxpass(pkt_username, password)
-        auth_status = auth_status and group_match(username) and two_factor(username)
+        auth_status = auth_status and group_match(username) and two_factor(username, pkt_username)
 
         if auth_status:
             logger.info("Successful auth for '%s'" % (pkt_username,))
