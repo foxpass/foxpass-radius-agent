@@ -286,7 +286,15 @@ def process_request(data, address, secret):
 
     try:
         # [0] is needed because pkt.get returns a list
-        pkt_username = pkt.get('User-Name')[0]
+        username = pkt.get('User-Name')
+        if not username:
+            logger.error("No User-Name in request")
+            reply_pkt.code = AccessReject
+            return reply_pkt.ReplyPacket()
+
+        # attributes are returned as a list
+        pkt_username = username[0]
+
         logger.info("Auth attempt for '%s'" % (pkt_username,))
         try:
             password = pkt.get('Password')
