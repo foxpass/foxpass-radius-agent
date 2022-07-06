@@ -148,11 +148,13 @@ def duo_mfa(username, password=''):
 
     duo_mode = get_config_item('duo_mode', 'push')
 
+    # default mode is push only
     if duo_mode == 'push':
         response = auth_api.auth('push',
                                  username=username,
                                  device='auto',
                                  async_txn=False)
+    # append mode appends factor to the end of password with comma separator
     elif duo_mode == 'append_mode':
         password, factor = duo_factor_split(password)
         if factor == 'push':
