@@ -332,21 +332,27 @@ def process_request(data, address, secret):
 
         logger.info("Auth attempt for '%s'" % (pkt_username,))
         try:
-            password = pkt.get('Password')
-            if not password:
+            pkt_password = pkt.get('Password')
+            if not pkt_password:
                 logger.error("No password field in request")
                 reply_pkt.code = AccessReject
                 return reply_pkt.ReplyPacket()
 
             # [0] is needed because pkt.get returns a list
-            password = pkt.PwDecrypt(password[0])
+            pkt_password = pkt.PwDecrypt(pkt_password[0])
         except UnicodeDecodeError:
             logger.error("Error decrypting password -- probably incorrect secret")
             reply_pkt.code = AccessReject
             return reply_pkt.ReplyPacket()
 
+        password = pkt_password
+        if get_config_item('mfa_type') == 'duo':
+            duo_mode = get_config_item('duo_mode', 'push')
+            if duo_mode == 'append_mode':
+                password, factor = duo_factor_split(pkt_password)
+
         (auth_status, username) = auth_with_foxpass(pkt_username, password)
-        auth_status = auth_status and group_match(username) and two_factor(username, pkt_username, password=password)
+        auth_status = auth_status and group_match(username) and two_factor(username, pkt_username, password=pkt_password)
 
         if auth_status:
             logger.info("Successful auth for '%s'" % (pkt_username,))
