@@ -26,6 +26,7 @@ api_key =
 # duo_api_host =
 # duo_skey =
 # duo_ikey =
+# duo_mode = push
 
 # If you want to use Okta, enter your parameters here.
 # okta_hostname =

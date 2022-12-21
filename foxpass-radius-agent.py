@@ -115,7 +115,7 @@ def auth_with_foxpass(username, password):
     return False, None
 
 
-def two_factor(username, pkt_username):
+def two_factor(username, pkt_username, password=''):
     # get mfa type
     mfa_type = get_config_item('mfa_type')
     if mfa_type == 'okta':
@@ -125,14 +125,14 @@ def two_factor(username, pkt_username):
         or (get_config_item('duo_api_host')
             or get_config_item('duo_ikey')
             or get_config_item('duo_skey')):
-        return duo_mfa(username)
+        return duo_mfa(username, password=password)
 
     # if MFA is not configured, return success
     logger.info("MFA not configured")
     return True
 
 
-def duo_mfa(username):
+def duo_mfa(username, password=''):
     # if Duo is not configured, return success
     if not get_config_item('duo_api_host') or \
        not get_config_item('duo_ikey') or \
@@ -146,10 +146,34 @@ def duo_mfa(username):
         host=get_config_item('duo_api_host')
     )
 
-    response = auth_api.auth('push',
-                             username=username,
-                             device='auto',
-                             async_txn=False)
+    duo_mode = get_config_item('duo_mode', 'push')
+
+    # default mode is push only
+    if duo_mode == 'push':
+        response = auth_api.auth('push',
+                                 username=username,
+                                 device='auto',
+                                 async_txn=False)
+    # append mode appends factor to the end of password with comma separator
+    elif duo_mode == 'append_mode':
+        password, factor = duo_factor_split(password)
+        if factor == 'push':
+            response = auth_api.auth('push',
+                                     username=username,
+                                     device='auto',
+                                     async_txn=False)
+        # passcode factors are 6 digits
+        elif len(factor) == 6 and factor.isdigit():
+            response = auth_api.auth('passcode',
+                                     username=username,
+                                     passcode=factor,
+                                     async_txn=False)
+        else:
+            logger.info("Invalid Duo factor")
+            return False
+    else:
+        logger.info("Invalid Duo mode configured")
+        return
 
     # success returns:
     # {u'status': u'allow', u'status_msg': u'Success. Logging you in...', u'result': u'allow'}
@@ -161,6 +185,17 @@ def duo_mfa(username):
 
     logger.info("Duo mfa failed")
     return False
+
+
+def duo_factor_split(password):
+    try:
+        # split at comma once starting from right end of string
+        password_elements = password.rsplit(',', 1)
+        password, factor = password_elements[0], password_elements[1]
+        return (password, factor)
+    except IndexError:
+        logger.info("Invalid comma split for Duo append mode factor")
+        return (password, '')
 
 
 def okta_mfa(username, pkt_username):
@@ -297,21 +332,27 @@ def process_request(data, address, secret):
 
         logger.info("Auth attempt for '%s'" % (pkt_username,))
         try:
-            password = pkt.get('Password')
-            if not password:
+            pkt_password = pkt.get('Password')
+            if not pkt_password:
                 logger.error("No password field in request")
                 reply_pkt.code = AccessReject
                 return reply_pkt.ReplyPacket()
 
             # [0] is needed because pkt.get returns a list
-            password = pkt.PwDecrypt(password[0])
+            pkt_password = pkt.PwDecrypt(pkt_password[0])
         except UnicodeDecodeError:
             logger.error("Error decrypting password -- probably incorrect secret")
             reply_pkt.code = AccessReject
             return reply_pkt.ReplyPacket()
 
+        password = pkt_password
+        if get_config_item('mfa_type') == 'duo':
+            duo_mode = get_config_item('duo_mode', 'push')
+            if duo_mode == 'append_mode':
+                password, factor = duo_factor_split(pkt_password)
+
         (auth_status, username) = auth_with_foxpass(pkt_username, password)
-        auth_status = auth_status and group_match(username) and two_factor(username, pkt_username)
+        auth_status = auth_status and group_match(username) and two_factor(username, pkt_username, password=pkt_password)
 
         if auth_status:
             logger.info("Successful auth for '%s'" % (pkt_username,))
