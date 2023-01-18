@@ -105,6 +105,17 @@ Messaging handled by journald; access the output using journal
 
       journalctl -u foxpass-radius-agent.service
 
+Docker
+=====
+Script setup for Docker
+------------
+```
+cp foxpass-radius-agent.conf.sample foxpass-radius-agent.conf
+docker build -t foxpass-radius-agent .
+docker run --network=host foxpass-radius-agent:latest
+```
+
+
 Testing
 =====
 
