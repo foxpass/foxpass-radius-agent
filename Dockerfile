@@ -13,4 +13,4 @@ RUN pip3 install -r requirements.txt
 # UDP
 EXPOSE 1812/UDP
 
-CMD ["python3", "/src/foxpass-radius-agent.py", "-c", "foxpass-radius-agent.conf"]
+CMD ["python3", "foxpass-radius-agent.py", "-c", "foxpass-radius-agent.conf"]
