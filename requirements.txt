@@ -1,5 +1,5 @@
 duo-client==4.2.3
 gevent==24.2.1
 pyrad==2.4
-requests==2.31.0
+requests==2.32.0
 greenlet==3.0.3
