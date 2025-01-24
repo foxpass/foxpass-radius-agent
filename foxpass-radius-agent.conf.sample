@@ -19,6 +19,11 @@ api_key =
 # If no groups are listed, no group membership will be enforced.
 # require_groups = 
 
+# Require Message-Authenticator in RADIUS requests
+# If set to "true", the server will enforce that all incoming requests include a valid Message-Authenticator.
+# If set to "false", Message-Authenticator will not be required.
+require_message_authenticator = false
+
 # If you want to use MFA, enter MFA type "duo" or "okta". Optional.
 # mfa_type = 
 

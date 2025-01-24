@@ -63,6 +63,7 @@ DICTIONARY_DATA = u"""
 ATTRIBUTE       User-Name               1       string
 ATTRIBUTE       Password                2       string
 ATTRIBUTE       Reply-Message           18      string
+ATTRIBUTE       Message-Authenticator   80      octets
 """
 
 
@@ -320,11 +321,25 @@ def process_request(data, address, secret):
     reply_pkt.code = AccessReject
 
     try:
+        if get_config_item('require_message_authenticator', 'false').lower() == 'true':
+            if 'Message-Authenticator' not in pkt:
+                logger.error("Missing Message-Authenticator in request")
+                reply_pkt.AddAttribute('Reply-Message', 'Missing Message-Authenticator')
+                reply_pkt.add_message_authenticator()
+                return reply_pkt.ReplyPacket()
+
+            if not pkt.verify_message_authenticator():
+                logger.error("Invalid Message-Authenticator in request")
+                reply_pkt.AddAttribute('Reply-Message', 'Invalid Message-Authenticator')
+                reply_pkt.add_message_authenticator()
+                return reply_pkt.ReplyPacket()
+
         # [0] is needed because pkt.get returns a list
         username = pkt.get('User-Name')
         if not username:
             logger.error("No User-Name in request")
             reply_pkt.code = AccessReject
+            reply_pkt.add_message_authenticator()
             return reply_pkt.ReplyPacket()
 
         # attributes are returned as a list
@@ -336,6 +351,7 @@ def process_request(data, address, secret):
             if not pkt_password:
                 logger.error("No password field in request")
                 reply_pkt.code = AccessReject
+                reply_pkt.add_message_authenticator()
                 return reply_pkt.ReplyPacket()
 
             # [0] is needed because pkt.get returns a list
@@ -343,6 +359,7 @@ def process_request(data, address, secret):
         except UnicodeDecodeError:
             logger.error("Error decrypting password -- probably incorrect secret")
             reply_pkt.code = AccessReject
+            reply_pkt.add_message_authenticator()
             return reply_pkt.ReplyPacket()
 
         password = pkt_password
@@ -357,6 +374,7 @@ def process_request(data, address, secret):
         if auth_status:
             logger.info("Successful auth for '%s'" % (pkt_username,))
             reply_pkt.code = AccessAccept
+            reply_pkt.add_message_authenticator()
             return reply_pkt.ReplyPacket()
 
         logger.info("Authentication failed for '%s'" % (pkt_username,))
@@ -368,6 +386,8 @@ def process_request(data, address, secret):
 
     if error_message:
         reply_pkt.AddAttribute('Reply-Message', error_message)
+
+    reply_pkt.add_message_authenticator()
     return reply_pkt.ReplyPacket()
 
 
