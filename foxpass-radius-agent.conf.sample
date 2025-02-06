@@ -22,7 +22,7 @@ api_key =
 # Require Message-Authenticator in RADIUS requests
 # If set to "true", the server will enforce that all incoming requests include a valid Message-Authenticator.
 # If set to "false", Message-Authenticator will not be required.
-require_message_authenticator = false
+require_message_authenticator = true
 
 # If you want to use MFA, enter MFA type "duo" or "okta". Optional.
 # mfa_type = 
